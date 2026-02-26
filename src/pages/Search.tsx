@@ -207,7 +207,7 @@ export default function Search() {
       } else {
         // Guest mode
         const storedVocabs = JSON.parse(localStorage.getItem('guest_vocabularies') || '[]');
-        const existing = storedVocabs.find((v: any) => v.word.toLowerCase() === result.word.toLowerCase());
+        const existing = storedVocabs.find((v: { word: string }) => v.word.toLowerCase() === result.word.toLowerCase());
         
         if (existing) {
           showToast(`"${result.word}" is already in your notebook`);
@@ -310,7 +310,7 @@ export default function Search() {
       } else {
         // Guest mode
         const storedVocabs = JSON.parse(localStorage.getItem('guest_vocabularies') || '[]');
-        const existing = storedVocabs.find((v: any) => v.word.toLowerCase() === term.toLowerCase());
+        const existing = storedVocabs.find((v: { word: string }) => v.word.toLowerCase() === term.toLowerCase());
 
         if (existing) {
           showToast(`"${term}" is already in your notebook`);

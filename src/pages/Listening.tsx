@@ -59,7 +59,7 @@ export default function Listening() {
               Transcript and interactive exercises would appear here.
               Listen to the video carefully and try to summarize it!
             </p>
-            <button className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-indigo-700 bg-indigo-100 hover:bg-indigo-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+            <button className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
               <CheckCircle className="w-4 h-4 mr-2" />
               Mark as Completed
             </button>

@@ -1,26 +1,15 @@
 
-import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { BookOpen, Headphones, Home, LogOut, Search, User } from 'lucide-react';
-import { supabase } from '../lib/supabase';
-import { useAuthStore } from '../store/authStore';
+import { Link, Outlet, useLocation } from 'react-router-dom';
+import { BookOpen, History, Headphones, Search, User } from 'lucide-react';
 
 export default function Layout() {
   const location = useLocation();
-  const navigate = useNavigate();
-  const { setSession } = useAuthStore();
-
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    setSession(null);
-    navigate('/login');
-  };
 
   const navItems = [
-    { path: '/', icon: Home, label: 'Home' },
-    { path: '/search', icon: Search, label: 'Search' },
-    { path: '/notebook', icon: BookOpen, label: 'Notebook' },
-    { path: '/review', icon: BookOpen, label: 'Review' }, 
+    { path: '/', icon: Search, label: 'Search' },
+    { path: '/daily-review', icon: History, label: 'Daily Review' },
     { path: '/listening', icon: Headphones, label: 'Listening' },
+    { path: '/notebook', icon: BookOpen, label: 'Notebook' },
     { path: '/profile', icon: User, label: 'Profile' },
   ];
 

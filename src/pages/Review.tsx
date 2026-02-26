@@ -1,6 +1,6 @@
 
 import { useState } from 'react';
-import { Check, X, RotateCcw } from 'lucide-react';
+import { Check, X } from 'lucide-react';
 import { useReview } from '../hooks/useReview';
 
 export default function Review() {

@@ -1,5 +1,5 @@
 
-import { Trash2, Volume2 } from 'lucide-react';
+import { Trash2 } from 'lucide-react';
 import { useNotebook, Vocabulary } from '../hooks/useNotebook';
 
 export default function Notebook() {

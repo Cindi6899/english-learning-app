@@ -4,7 +4,6 @@ import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import { supabase } from './lib/supabase';
 import { useAuthStore } from './store/authStore';
 import Layout from './components/Layout';
-import ProtectedRoute from './components/ProtectedRoute';
 import ReloadPrompt from './components/ReloadPrompt';
 
 // Pages
@@ -44,8 +43,8 @@ function App() {
         <Route path="/register" element={<Register />} />
         
         <Route element={<Layout />}>
-          <Route path="/" element={<Home />} />
-          <Route path="/search" element={<Search />} />
+          <Route path="/" element={<Search />} />
+          <Route path="/daily-review" element={<Home />} />
           <Route path="/notebook" element={<Notebook />} />
           <Route path="/review" element={<Review />} />
           <Route path="/listening" element={<Listening />} />
