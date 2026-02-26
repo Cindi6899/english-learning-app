@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Search as SearchIcon, Plus, Loader2, Volume2, BookOpen, X } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -135,52 +134,90 @@ export default function Search() {
   };
 
   const handleAddToNotebook = async () => {
-    if (!user || !result) return;
+    if (!result) return;
     setAdding(true);
 
     try {
-      // Check for duplicates first
-      const { data: existing, error: checkError } = await supabase
-        .from('vocabularies')
-        .select('id')
-        .eq('user_id', user.id)
-        .ilike('word', result.word)
-        .maybeSingle();
+      if (user) {
+        // Check for duplicates first
+        const { data: existing, error: checkError } = await supabase
+          .from('vocabularies')
+          .select('id')
+          .eq('user_id', user.id)
+          .ilike('word', result.word)
+          .maybeSingle();
 
-      if (checkError) throw checkError;
+        if (checkError) throw checkError;
 
-      if (existing) {
-        showToast(`"${result.word}" is already in your notebook`);
-        return;
-      }
+        if (existing) {
+          showToast(`"${result.word}" is already in your notebook`);
+          return;
+        }
 
-      // 1. Insert into vocabularies
-      const { data: vocabData, error: vocabError } = await supabase
-        .from('vocabularies')
-        .insert({
-          user_id: user.id,
+        // 1. Insert into vocabularies
+        const { data: vocabData, error: vocabError } = await supabase
+          .from('vocabularies')
+          .insert({
+            user_id: user.id,
+            word: result.word,
+            translation: translation, 
+            pronunciation: result.phonetic || result.phonetics.find(p => p.text)?.text || '',
+            example_sentence: customDefinition, 
+            mastery_level: 'new',
+          })
+          .select()
+          .single();
+
+        if (vocabError) throw vocabError;
+
+        // 2. Schedule first review (1 day later)
+        const { error: scheduleError } = await supabase
+          .from('review_schedules')
+          .insert({
+            user_id: user.id,
+            vocabulary_id: vocabData.id,
+            review_date: addDays(new Date(), 1).toISOString(),
+            review_stage: 1,
+          });
+
+        if (scheduleError) throw scheduleError;
+      } else {
+        // Guest mode
+        const storedVocabs = JSON.parse(localStorage.getItem('guest_vocabularies') || '[]');
+        const existing = storedVocabs.find((v: any) => v.word.toLowerCase() === result.word.toLowerCase());
+        
+        if (existing) {
+          showToast(`"${result.word}" is already in your notebook`);
+          return;
+        }
+
+        const newVocab = {
+          id: crypto.randomUUID(),
           word: result.word,
-          translation: translation, 
+          translation: translation,
           pronunciation: result.phonetic || result.phonetics.find(p => p.text)?.text || '',
-          example_sentence: customDefinition, 
+          example_sentence: customDefinition,
           mastery_level: 'new',
-        })
-        .select()
-        .single();
+          created_at: new Date().toISOString(),
+          user_id: 'guest'
+        };
 
-      if (vocabError) throw vocabError;
+        storedVocabs.push(newVocab);
+        localStorage.setItem('guest_vocabularies', JSON.stringify(storedVocabs));
 
-      // 2. Schedule first review (1 day later)
-      const { error: scheduleError } = await supabase
-        .from('review_schedules')
-        .insert({
-          user_id: user.id,
-          vocabulary_id: vocabData.id,
+        // Schedule review
+        const newSchedule = {
+          id: crypto.randomUUID(),
+          vocabulary_id: newVocab.id,
           review_date: addDays(new Date(), 1).toISOString(),
           review_stage: 1,
-        });
+          completed: false
+        };
 
-      if (scheduleError) throw scheduleError;
+        const storedReviews = JSON.parse(localStorage.getItem('guest_reviews') || '[]');
+        storedReviews.push(newSchedule);
+        localStorage.setItem('guest_reviews', JSON.stringify(storedReviews));
+      }
 
       showToast('Added successful');
       setQuery('');
@@ -202,51 +239,88 @@ export default function Search() {
 
   const handleQuickAdd = async (term: string, translation: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!user) return;
     
     // Check if word already exists in notebook (case-insensitive)
     try {
-      const { data: existing, error: checkError } = await supabase
-        .from('vocabularies')
-        .select('id')
-        .eq('user_id', user.id)
-        .ilike('word', term)
-        .maybeSingle();
+      if (user) {
+        const { data: existing, error: checkError } = await supabase
+          .from('vocabularies')
+          .select('id')
+          .eq('user_id', user.id)
+          .ilike('word', term)
+          .maybeSingle();
 
-      if (checkError) throw checkError;
+        if (checkError) throw checkError;
 
-      if (existing) {
-        showToast(`"${term}" is already in your notebook`);
-        return;
-      }
+        if (existing) {
+          showToast(`"${term}" is already in your notebook`);
+          return;
+        }
 
-      // 1. Insert into vocabularies
-      const { data: vocabData, error: vocabError } = await supabase
-        .from('vocabularies')
-        .insert({
-          user_id: user.id,
+        // 1. Insert into vocabularies
+        const { data: vocabData, error: vocabError } = await supabase
+          .from('vocabularies')
+          .insert({
+            user_id: user.id,
+            word: term,
+            translation: translation,
+            pronunciation: '', // Will be fetched if full search is done
+            example_sentence: translation, // Use translation as fallback note
+            mastery_level: 'new',
+          })
+          .select()
+          .single();
+
+        if (vocabError) throw vocabError;
+
+        // 2. Schedule first review
+        const { error: scheduleError } = await supabase
+          .from('review_schedules')
+          .insert({
+            user_id: user.id,
+            vocabulary_id: vocabData.id,
+            review_date: addDays(new Date(), 1).toISOString(),
+            review_stage: 1,
+          });
+
+        if (scheduleError) throw scheduleError;
+      } else {
+        // Guest mode
+        const storedVocabs = JSON.parse(localStorage.getItem('guest_vocabularies') || '[]');
+        const existing = storedVocabs.find((v: any) => v.word.toLowerCase() === term.toLowerCase());
+
+        if (existing) {
+          showToast(`"${term}" is already in your notebook`);
+          return;
+        }
+
+        const newVocab = {
+          id: crypto.randomUUID(),
           word: term,
           translation: translation,
-          pronunciation: '', // Will be fetched if full search is done
-          example_sentence: translation, // Use translation as fallback note
+          pronunciation: '',
+          example_sentence: translation,
           mastery_level: 'new',
-        })
-        .select()
-        .single();
+          created_at: new Date().toISOString(),
+          user_id: 'guest'
+        };
 
-      if (vocabError) throw vocabError;
+        storedVocabs.push(newVocab);
+        localStorage.setItem('guest_vocabularies', JSON.stringify(storedVocabs));
 
-      // 2. Schedule first review
-      const { error: scheduleError } = await supabase
-        .from('review_schedules')
-        .insert({
-          user_id: user.id,
-          vocabulary_id: vocabData.id,
+        // Schedule review
+        const newSchedule = {
+          id: crypto.randomUUID(),
+          vocabulary_id: newVocab.id,
           review_date: addDays(new Date(), 1).toISOString(),
           review_stage: 1,
-        });
+          completed: false
+        };
 
-      if (scheduleError) throw scheduleError;
+        const storedReviews = JSON.parse(localStorage.getItem('guest_reviews') || '[]');
+        storedReviews.push(newSchedule);
+        localStorage.setItem('guest_reviews', JSON.stringify(storedReviews));
+      }
       showToast('Added successful');
     } catch (err) {
       console.error('Error adding word:', err);

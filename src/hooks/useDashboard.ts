@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../store/authStore';
@@ -8,7 +7,7 @@ interface DashboardStats {
   totalVocabulary: number;
   reviewsDue: number;
   reviewsCompletedToday: number;
-  streakDays: number; // Placeholder for now
+  streakDays: number;
 }
 
 export function useDashboard() {
@@ -23,7 +22,10 @@ export function useDashboard() {
 
   useEffect(() => {
     async function fetchStats() {
-      if (!user) return;
+      if (!user) {
+        fetchGuestStats();
+        return;
+      }
 
       try {
         // 1. Total Vocabulary
@@ -34,12 +36,14 @@ export function useDashboard() {
 
         // 2. Reviews Due (today or overdue)
         const todayStr = new Date().toISOString();
-        const { count: reviewsDue } = await supabase
+        const { count: reviewsDue, error: reviewError } = await supabase
           .from('review_schedules')
           .select('*', { count: 'exact', head: true })
           .eq('user_id', user.id)
           .lte('review_date', todayStr)
           .eq('completed', false);
+
+        if (reviewError) throw reviewError;
 
         // 3. Reviews Completed Today
         const start = startOfDay(new Date()).toISOString();
@@ -60,6 +64,27 @@ export function useDashboard() {
         });
       } catch (error) {
         console.error('Error fetching dashboard stats:', error);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    function fetchGuestStats() {
+      try {
+        const storedVocabs = JSON.parse(localStorage.getItem('guest_vocabularies') || '[]');
+        const storedReviews = JSON.parse(localStorage.getItem('guest_reviews') || '[]');
+        const today = new Date();
+
+        const due = storedReviews.filter((r: any) => !r.completed && new Date(r.review_date) <= today).length;
+
+        setStats({
+          totalVocabulary: storedVocabs.length,
+          reviewsDue: due,
+          reviewsCompletedToday: 0, // Not tracking completion time for guests yet
+          streakDays: 1,
+        });
+      } catch (error) {
+        console.error('Error fetching guest stats:', error);
       } finally {
         setLoading(false);
       }

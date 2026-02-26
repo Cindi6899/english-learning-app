@@ -43,15 +43,13 @@ function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         
-        <Route element={<ProtectedRoute />}>
-          <Route element={<Layout />}>
-            <Route path="/" element={<Home />} />
-            <Route path="/search" element={<Search />} />
-            <Route path="/notebook" element={<Notebook />} />
-            <Route path="/review" element={<Review />} />
-            <Route path="/listening" element={<Listening />} />
-            <Route path="/profile" element={<Profile />} />
-          </Route>
+        <Route element={<Layout />}>
+          <Route path="/" element={<Home />} />
+          <Route path="/search" element={<Search />} />
+          <Route path="/notebook" element={<Notebook />} />
+          <Route path="/review" element={<Review />} />
+          <Route path="/listening" element={<Listening />} />
+          <Route path="/profile" element={<Profile />} />
         </Route>
       </Routes>
     </BrowserRouter>
