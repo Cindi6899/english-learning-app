@@ -84,23 +84,46 @@ export default function Search() {
     setQuery(searchTerm);
 
     try {
-      const [dictResponse, transResult] = await Promise.all([
-        fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${searchTerm}`),
-        fetchTranslation(searchTerm)
-      ]);
+      // Parallel execution with timeout for dictionary API
+      // If dictionary API is too slow, we'll proceed with just translation
+      const dictionaryPromise = fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${searchTerm}`);
+      const translationPromise = fetchTranslation(searchTerm);
 
-      if (dictResponse.ok) {
-        const data = await dictResponse.json();
-        setResult(data[0]);
+      // Create a race between the dictionary request and a timeout (e.g., 3 seconds)
+      const dictionaryTimeout = new Promise<Response>((_, reject) => 
+        setTimeout(() => reject(new Error('Dictionary timeout')), 3000)
+      );
+
+      // We wait for translation (critical for Chinese users) and attempt dictionary
+      let transResult = '';
+      let dictData = null;
+
+      try {
+        transResult = await translationPromise;
+      } catch (e) {
+        console.error('Translation failed:', e);
+      }
+
+      // Try to get dictionary data, but don't block forever if translation is already ready
+      try {
+        const dictResponse = await Promise.race([dictionaryPromise, dictionaryTimeout]);
+        if (dictResponse instanceof Response && dictResponse.ok) {
+          const data = await dictResponse.json();
+          dictData = data[0];
+        }
+      } catch (e) {
+        console.warn('Dictionary lookup skipped/failed (timeout or error):', e);
+      }
+
+      if (dictData) {
+        setResult(dictData);
         setTranslation(transResult);
-        saveToHistory(searchTerm, transResult); // Save with translation
-        // Pre-fill definition with the first one found
-        if (data[0].meanings[0]?.definitions[0]?.definition) {
-          setCustomDefinition(data[0].meanings[0].definitions[0].definition);
+        saveToHistory(searchTerm, transResult);
+        if (dictData.meanings[0]?.definitions[0]?.definition) {
+          setCustomDefinition(dictData.meanings[0].definitions[0].definition);
         }
       } else if (transResult) {
-        // Fallback: Dictionary API failed but Translation API succeeded
-        // Construct a mock DictionaryEntry so the UI can render
+        // Fallback: Use translation as the main result
         const mockEntry: DictionaryEntry = {
           word: searchTerm,
           phonetic: '',
@@ -109,15 +132,15 @@ export default function Search() {
             {
               partOfSpeech: 'phrase',
               definitions: [
-                { definition: transResult, example: '' } // Use translation as definition if no English def available
+                { definition: transResult, example: '' }
               ]
             }
           ]
         };
         setResult(mockEntry);
         setTranslation(transResult);
-        saveToHistory(searchTerm, transResult); // Save with translation
-        setCustomDefinition(transResult); // Use translation as definition/note
+        saveToHistory(searchTerm, transResult);
+        setCustomDefinition(transResult);
       } else {
         throw new Error('Word not found');
       }
