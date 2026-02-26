@@ -37,7 +37,7 @@ export default function Home() {
           <div className="mt-6 flex justify-start">
             <Link
               to="/review"
-              className="inline-flex items-center justify-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-full transition-colors shadow-sm"
+              className="inline-flex items-center justify-center px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors shadow-sm"
             >
               Start Review Session
               <ArrowRight className="w-4 h-4 ml-2" />
