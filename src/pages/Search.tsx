@@ -58,11 +58,41 @@ export default function Search() {
 
   const fetchTranslation = async (text: string) => {
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000); // 5s timeout
+
       // Try Google Translate API (undocumented)
-      const res = await fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=zh-CN&dt=t&q=${encodeURIComponent(text)}`);
+      const res = await fetch(
+        `https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=zh-CN&dt=t&q=${encodeURIComponent(text)}`,
+        { signal: controller.signal }
+      );
+      clearTimeout(timeoutId);
+      
       if (!res.ok) throw new Error('Translation API failed');
       const data = await res.json();
-      return data[0][0][0];
+      
+      // Extract primary translation
+      const primaryTranslation = data[0]?.[0]?.[0] || '';
+
+      // Extract additional translations from the "dictionary" part (data[1])
+      // data[1] structure: [[pos, [word1, word2, ...], ...], ...]
+      const additionalTranslations: string[] = [];
+      if (data[1] && Array.isArray(data[1])) {
+        data[1].forEach((group: unknown) => {
+          if (Array.isArray(group) && Array.isArray(group[1])) {
+            additionalTranslations.push(...(group[1] as string[]));
+          }
+        });
+      }
+
+      // Combine distinct translations, prioritizing the primary one
+      const distinctTranslations = Array.from(new Set([
+        primaryTranslation,
+        ...additionalTranslations
+      ])).filter(Boolean);
+
+      // Return top 5 distinct translations joined by semicolon
+      return distinctTranslations.slice(0, 5).join('; ');
     } catch (e) {
       console.error('Translation failed', e);
       // Fallback for demo if API fails (CORS or other issues)
@@ -84,45 +114,49 @@ export default function Search() {
     setQuery(searchTerm);
 
     try {
-      // Parallel execution with timeout for dictionary API
-      // If dictionary API is too slow, we'll proceed with just translation
-      const dictionaryPromise = fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${searchTerm}`);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000); // 5s timeout for dictionary
+
+      // Parallel execution
+      const dictionaryPromise = fetch(
+        `https://api.dictionaryapi.dev/api/v2/entries/en/${searchTerm}`,
+        { signal: controller.signal }
+      ).then(async (res) => {
+        if (res.ok) return res.json();
+        throw new Error('Dictionary API failed');
+      });
+
       const translationPromise = fetchTranslation(searchTerm);
 
-      // Create a race between the dictionary request and a timeout (e.g., 3 seconds)
-      const dictionaryTimeout = new Promise<Response>((_, reject) => 
-        setTimeout(() => reject(new Error('Dictionary timeout')), 3000)
-      );
+      // Wait for both to complete or fail, independently
+      const [dictResult, transResult] = await Promise.allSettled([
+        dictionaryPromise,
+        translationPromise
+      ]);
+      
+      clearTimeout(timeoutId);
 
-      // We wait for translation (critical for Chinese users) and attempt dictionary
-      let transResult = '';
       let dictData = null;
+      let finalTranslation = '';
 
-      try {
-        transResult = await translationPromise;
-      } catch (e) {
-        console.error('Translation failed:', e);
+      if (dictResult.status === 'fulfilled') {
+        dictData = dictResult.value[0];
+      } else {
+        console.warn('Dictionary lookup failed:', dictResult.reason);
       }
 
-      // Try to get dictionary data, but don't block forever if translation is already ready
-      try {
-        const dictResponse = await Promise.race([dictionaryPromise, dictionaryTimeout]);
-        if (dictResponse instanceof Response && dictResponse.ok) {
-          const data = await dictResponse.json();
-          dictData = data[0];
-        }
-      } catch (e) {
-        console.warn('Dictionary lookup skipped/failed (timeout or error):', e);
+      if (transResult.status === 'fulfilled') {
+        finalTranslation = transResult.value;
       }
 
       if (dictData) {
         setResult(dictData);
-        setTranslation(transResult);
-        saveToHistory(searchTerm, transResult);
+        setTranslation(finalTranslation);
+        saveToHistory(searchTerm, finalTranslation);
         if (dictData.meanings[0]?.definitions[0]?.definition) {
           setCustomDefinition(dictData.meanings[0].definitions[0].definition);
         }
-      } else if (transResult) {
+      } else if (finalTranslation) {
         // Fallback: Use translation as the main result
         const mockEntry: DictionaryEntry = {
           word: searchTerm,
@@ -132,17 +166,17 @@ export default function Search() {
             {
               partOfSpeech: 'phrase',
               definitions: [
-                { definition: transResult, example: '' }
+                { definition: finalTranslation, example: '' }
               ]
             }
           ]
         };
         setResult(mockEntry);
-        setTranslation(transResult);
-        saveToHistory(searchTerm, transResult);
-        setCustomDefinition(transResult);
+        setTranslation(finalTranslation);
+        saveToHistory(searchTerm, finalTranslation);
+        setCustomDefinition(finalTranslation);
       } else {
-        throw new Error('Word not found');
+        throw new Error('Word not found or network timeout');
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to search word');
